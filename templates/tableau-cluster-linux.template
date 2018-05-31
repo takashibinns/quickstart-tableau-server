@@ -121,12 +121,20 @@ Parameters:
     Description: Country
     MinLength: 1
     Type: String
+  RegDepartment:
+    Description: Department
+    MinLength: 1
+    Type: String
   RegEmail:
     Description: Email
     MinLength: 1
     Type: String
   RegFirstName:
     Description: First Name
+    MinLength: 1
+    Type: String
+  RegIndustry:
+    Description: Industry
     MinLength: 1
     Type: String
   RegLastName:
@@ -362,7 +370,6 @@ Resources:
           // write data to request body
           request.write(responseBody);
           request.end();
-        }
       Handler: index.handler
       Role:
         Fn::GetAtt:
@@ -475,7 +482,7 @@ Resources:
         LoadBalancerPort: !If [ HasSSLCertificate, 443, 80 ]
         InstanceProtocol: !If [ HasSSLCertificate, HTTPS, HTTP]
         InstancePort: !If [ HasSSLCertificate, 443, 80 ]
-        SSLCertificateId: !If [ HasSSLCertificate, !Ref SSLCertificateARN, !Ref "AWS:NoValue" ]
+        SSLCertificateId: !If [ HasSSLCertificate, !Ref SSLCertificateARN, !Ref "AWS::NoValue" ]
       Instances: !Ref PrimaryServer
       Tags:
       - Key: Name
@@ -611,7 +618,7 @@ Resources:
                 zip: !Ref RegZip
                 country: !Ref RegCountry
     Properties:
-      SubnetId: !Selcect [ 0 , !Ref PrivateSubnetIds ]
+      SubnetId: !Select [ 0 , !Ref PrivateSubnetIds ]
       ImageId: !FindInMap [ AWSAMIRegionMap, !Ref "AWS::Region", !FindInMap [ LinuxAMINameMap, !Ref AMIOS, Code ] ]
       InstanceType: !Ref InstanceType
       # Check to make sure existing SG doesn't open port 80?
@@ -720,7 +727,7 @@ Resources:
     Condition: HasElasticIP
     Properties:
       InstanceId: !Ref PrimaryServer
-      EIP: !ref IPAddress
+      EIP: !Ref IPAddress
   ServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Condition: NoServerSecurityGroup

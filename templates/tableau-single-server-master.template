@@ -234,86 +234,38 @@ Resources:
       TemplateURL:
         Fn::Sub:
         - https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/${QSTableauWorkloadTemplate}
-        - QSTableauWorkloadTemplate:
-            Fn::If:
-            - InfaOnWindows
-            - tableau-single-server-windows.template
-            - Fn::If:
-              - InfaOnCentos
-              - tableau-single-server-centos.template
-              - tableau-single-server-ubuntu.template
+        - QSTableauWorkloadTemplate: !If [ InfaOnWindows, tableau-single-server-windows.template, !If [ InfaOnCentos, tableau-single-server-centos.template, tableau-single-server-ubuntu.template ] ]
       Parameters:
-        AcceptEULA:
-          Fn::If:
-          - InfaOnWindows
-          - Ref: AWS::NoValue
-          - Ref: AcceptEULA
-        ExistingSecurityGroup:
-          Ref: ExistingSecurityGroup
-        IPAddress:
-          Ref: IPAddress
-        InstanceType:
-          Ref: InstanceType
-        KeyPairName:
-          Ref: KeyPairName
-        Password:
-          Fn::If:
-          - InfaOnWindows
-          - Ref: AWS::NoValue
-          - Ref: Password
-        RegCity:
-          Ref: RegCity
-        RegCompany:
-          Ref: RegCompany
-        RegCountry:
-          Ref: RegCountry
-        RegDepartment:
-          Ref: RegDepartment
-        RegEmail:
-          Ref: RegEmail
-        RegFirstName:
-          Ref: RegFirstName
-        RegIndustry:
-          Ref: RegIndustry
-        RegLastName:
-          Ref: RegLastName
-        RegPhone:
-          Ref: RegPhone
-        RegState:
-          Ref: RegState
-        RegTitle:
-          Ref: RegTitle
-        RegZip:
-          Ref: RegZip
-        SourceCIDR:
-          Ref: SourceCIDR
-        TableauServerAdminPassword:
-          Ref: TableauServerAdminPassword
-        TableauServerAdminUser:
-          Ref: TableauServerAdminUser
-        TableauServerLicenseKey:
-          Ref: TableauServerLicenseKey
-        Username:
-          Fn::If:
-          - InfaOnWindows
-          - Ref: AWS::NoValue
-          - Ref: Username
+        AcceptEULA: [ InfaOnWindows, !Ref "AWS::NoValue", !Ref AcceptEULA ]
+        ExistingSecurityGroup: !Ref ExistingSecurityGroup
+        IPAddress: !Ref IPAddress
+        InstanceType: !Ref InstanceType
+        KeyPairName: !Ref KeyPairName
+        Password: !If [ InfaOnWindows, !Ref "AWS::NoValue", !Ref Password ]
+        RegCity: !Ref RegCity
+        RegCompany: !Ref RegCompany
+        RegCountry: !Ref RegCountry
+        RegDepartment: !Ref RegDepartment
+        RegEmail: !Ref RegEmail
+        RegFirstName: !Ref RegFirstName
+        RegIndustry: !Ref RegIndustry
+        RegLastName: !Ref RegLastName
+        RegPhone: !Ref RegPhone
+        RegState: !Ref RegState
+        RegTitle: !Ref RegTitle
+        RegZip: !Ref RegZip
+        SourceCIDR: !Ref SourceCIDR
+        TableauServerAdminPassword: !Ref TableauServerAdminPassword
+        TableauServerAdminUser: !Ref TableauServerAdminUser
+        TableauServerLicenseKey: !Ref TableauServerLicenseKey
+        Username: !If [ InfaOnWindows, !Ref "AWS::NoValue", !Ref Username ]
 Outputs:
   InstanceID:
     Description: EC2 InstanceID of the instance running Tableau Server
-    Value:
-      Fn::GetAtt:
-      - WorkloadStack
-      - Outputs.InstanceID
+    Value: !GetAtt WorkloadStack.Outputs.InstanceID
   PublicIPAddress:
     Description: Public IP Address of instance running Tableau Server
-    Value:
-      Fn::GetAtt:
-      - WorkloadStack
-      - Outputs.PublicIPAddress
+    Value: !GetAtt WorkloadStack.Outputs.PublicIPAddress
   TableauServerURL:
     Description: URL for the Tableau Server
-    Value:
-      Fn::GetAtt:
-      - WorkloadStack
-      - Outputs.TableauServerURL
+    Value: !GetAtt WorkloadStack.Outputs.TableauServerURL

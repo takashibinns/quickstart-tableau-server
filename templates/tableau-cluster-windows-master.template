@@ -221,6 +221,7 @@ Mappings:
       PrivateSubnet2CIDR: 10.0.4.0/24
       PublicSubnet3CIDR: 10.0.5.0/24
       PrivateSubnet3CIDR: 10.0.6.0/24
+      # Should this be hardcoded?
       PrimaryIP: 10.0.2.11
       Worker1IP: 10.0.4.11
       Worker2IP: 10.0.6.11
@@ -243,48 +244,15 @@ Resources:
       TemplateURL:
         Fn::Sub: https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}submodules/quickstart-aws-vpc/templates/aws-vpc.template
       Parameters:
-        AvailabilityZones:
-          Fn::Join:
-          - ","
-          - Ref: AvailabilityZones
-        KeyPairName:
-          Ref: KeyPairName
+        AvailabilityZones: !Join [ ",", !Ref AvailabilityZones ]
+        KeyPairName: !Ref KeyPairName
         NumberOfAZs: '3'
-        PrivateSubnet1ACIDR:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - PrivateSubnet1CIDR
-        PrivateSubnet2ACIDR:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - PrivateSubnet2CIDR
-        PrivateSubnet3ACIDR:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - PrivateSubnet3CIDR
-        PublicSubnet1CIDR:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - PublicSubnet1CIDR
-        PublicSubnet2CIDR:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - PublicSubnet2CIDR
-        PublicSubnet3CIDR:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - PublicSubnet3CIDR
-        VPCCIDR:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - VPCCIDR
+        PrivateSubnet1ACIDR: !FindInMap [ DefaultConfiguration, NetworkConfiguration, PrivateSubnet1CIDR ]
+        PrivateSubnet2ACIDR: !FindInMap [ DefaultConfiguration, NetworkConfiguration, PrivateSubnet2CIDR ]
+        PrivateSubnet3ACIDR: !FindInMap [ DefaultConfiguration, NetworkConfiguration, PrivateSubnet3CIDR ]
+        PublicSubnet1CIDR: !FindInMap [ DefaultConfiguration, NetworkConfiguration, PublicSubnet1CIDR ]
+        PublicSubnet2CIDR: !FindInMap [ DefaultConfiguration, NetworkConfiguration, PublicSubnet2CIDR ]
+        PublicSubnet3CIDR: !FindInMap [ DefaultConfiguration, NetworkConfiguration, PublicSubnet3CIDR ]
   BastionHost:
     Type: AWS::CloudFormation::Stack
     DependsOn:
@@ -293,187 +261,93 @@ Resources:
       TemplateURL:
         Fn::Sub: https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/windows-bastion.template
       Parameters:
-        InstanceType:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - MachineConfiguration
-          - BastionInstanceType
-        KeyPairName:
-          Ref: KeyPairName
-        SourceCIDR:
-          Ref: SourceCIDR
-        SubnetId:
-          Fn::GetAtt:
-          - VPCStack
-          - Outputs.PublicSubnet1ID
-        VPCID:
-          Fn::GetAtt:
-          - VPCStack
-          - Outputs.VPCID
+        InstanceType: !FindInMap [ DefaultConfiguration, MachineConfiguration, BastionInstanceType ]
+        KeyPairName: !Ref KeyPairName
+        RemoteAccessCIDR: !Ref SourceCIDR
+        PublicSubnet1ID: !GetAtt VPCStack.Outputs.PublicSubnet1ID
+        PublicSubnet2ID: !GetAtt VPCStack.Outputs.PublicSubnet2ID
+        VPCID: !GetAtt VPCStack.Outputs.VPCID
   WorkloadStack:
     Type: AWS::CloudFormation::Stack
     DependsOn:
     - VPCStack
     Properties:
-      TemplateURL:
-        Fn::Sub: https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/tableau-cluster-windows.template
+      TemplateURL: !Sub https://${QSS3BucketName}.s3.amazonaws.com/${QSS3KeyPrefix}templates/tableau-cluster-windows.template
       Parameters:
-        AWSPublicFQDN:
-          Ref: AWSPublicFQDN
-        TableauServerAdminPassword:
-          Ref: TableauServerAdminPassword
-        TableauServerAdminUser:
-          Ref: TableauServerAdminUser
-        KeyPairName:
-          Ref: KeyPairName
-        PrimaryIP:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - PrimaryIP
-        PrimaryPublicSubnetID:
-          Fn::GetAtt:
-          - VPCStack
-          - Outputs.PublicSubnet1ID
-        PrimarySubnetID:
-          Fn::GetAtt:
-          - VPCStack
-          - Outputs.PrivateSubnet1AID
-        RegCity:
-          Ref: RegCity
-        RegCompany:
-          Ref: RegCompany
-        RegCountry:
-          Ref: RegCountry
-        RegDepartment:
-          Ref: RegDepartment
-        RegEmail:
-          Ref: RegEmail
-        RegFirstName:
-          Ref: RegFirstName
-        RegIndustry:
-          Ref: RegIndustry
-        RegLastName:
-          Ref: RegLastName
-        RegPhone:
-          Ref: RegPhone
-        RegState:
-          Ref: RegState
-        RegTitle:
-          Ref: RegTitle
-        RegZip:
-          Ref: RegZip
-        SSLCertificateARN:
-          Ref: SSLCertificateARN
-        SourceCIDR:
-          Ref: SourceCIDR
-        TableauServerLicenseKey:
-          Ref: TableauServerLicenseKey
-        VPCID:
-          Fn::GetAtt:
-          - VPCStack
-          - Outputs.VPCID
-        Worker1IP:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - Worker1IP
-        Worker1PublicSubnetID:
-          Fn::GetAtt:
-          - VPCStack
-          - Outputs.PublicSubnet2ID
-        Worker1SubnetID:
-          Fn::GetAtt:
-          - VPCStack
-          - Outputs.PrivateSubnet2AID
-        Worker2IP:
-          Fn::FindInMap:
-          - DefaultConfiguration
-          - NetworkConfiguration
-          - Worker2IP
-        Worker2PublicSubnetID:
-          Fn::GetAtt:
-          - VPCStack
-          - Outputs.PublicSubnet3ID
-        Worker2SubnetID:
-          Fn::GetAtt:
-          - VPCStack
-          - Outputs.PrivateSubnet3AID
+        AWSPublicFQDN: !Ref AWSPublicFQDN
+        TableauServerAdminPassword: !Ref TableauServerAdminPassword
+        TableauServerAdminUser: !Ref TableauServerAdminUser
+        KeyPairName: !Ref KeyPairName
+        PrimaryIP: !FindInMap [ DefaultConfiguration, NetworkConfiguration, PrimaryIP ]
+        PrimaryPublicSubnetID: !GetAtt VPCStack.Outputs.PublicSubnet1ID
+        PrimarySubnetID: !GetAtt VPCStack.Outputs.PrivateSubnet1AID
+        RegCity: !Ref RegCity
+        RegCompany: !Ref RegCompany
+        RegCountry: !Ref RegCountry
+        RegDepartment: !Ref RegDepartment
+        RegEmail: !Ref RegEmail
+        RegFirstName: !Ref RegFirstName
+        RegIndustry: !Ref RegIndustry
+        RegLastName: !Ref RegLastName
+        RegPhone: !Ref RegPhone
+        RegState: !Ref RegState
+        RegTitle: !Ref RegTitle
+        RegZip: !Ref RegZip
+        SSLCertificateARN: !Ref SSLCertificateARN
+        SourceCIDR: !Ref SourceCIDR
+        TableauServerLicenseKey: !Ref TableauServerLicenseKey
+        VPCID: !GetAtt VPCStack.Outputs.VPCID
+        Worker1IP: !FindInMap [ DefaultConfiguration, NetworkConfiguration, Worker1IP ]
+        Worker1PublicSubnetID: !GetAtt VPCStack.Outputs.PublicSubnet2ID
+        Worker1SubnetID: !GetAtt VPCStack.Outputs.PrivateSubnet2AID
+        Worker2IP: !FindInMap [ DefaultConfiguration, NetworkConfiguration, Worker2IP ]
+        Worker2PublicSubnetID: !GetAtt VPCStack.Outputs.PublicSubnet3ID
+        Worker2SubnetID: !GetAtt VPCStack.Outputs.PrivateSubnet3AID
   WorkloadSecurityGroupBastionRDPIngress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn:
     - BastionHost
     - WorkloadStack
     Properties:
-      GroupId:
-        Fn::GetAtt:
-        - WorkloadStack
-        - Outputs.SecurityGroup
+      GroupId: !GetAtt WorkloadStack.Outputs.SecurityGroup
       IpProtocol: tcp
       FromPort: '3389'
       ToPort: '3389'
-      SourceSecurityGroupId:
-        Fn::GetAtt:
-        - BastionHost
-        - Outputs.SecurityGroup
+      SourceSecurityGroupId: !GetAtt BastionHost.Outputs.SecurityGroup
   WorkloadSecurityGroupBastionWebIngress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn:
     - BastionHost
     - WorkloadStack
     Properties:
-      GroupId:
-        Fn::GetAtt:
-        - WorkloadStack
-        - Outputs.SecurityGroup
+      GroupId: !GetAtt WorkloadStack.Outputs.SecurityGroup
       IpProtocol: tcp
       FromPort: '80'
       ToPort: '80'
-      SourceSecurityGroupId:
-        Fn::GetAtt:
-        - BastionHost
-        - Outputs.SecurityGroup
+      SourceSecurityGroupId: !GetAtt BastionHost.Outputs.SecurityGroup
   DNSNameEntry:
     Type: AWS::Route53::RecordSet
     Condition: CreateDNSEntry
     DependsOn:
     - WorkloadStack
     Properties:
-      HostedZoneId:
-        Ref: AWSHostedZoneID
-      Name:
-        Fn::Sub: "${AWSPublicFQDN}."
+      HostedZoneId: !Ref AWSHostedZoneID
+      Name: !Sub "${AWSPublicFQDN}."
       Type: A
       AliasTarget:
-        HostedZoneId:
-          Fn::GetAtt:
-          - WorkloadStack
-          - Outputs.LoadBalancerCanonicalHostedZoneNameID
-        DNSName:
-          Fn::GetAtt:
-          - WorkloadStack
-          - Outputs.LoadBalancerDNSName
+        HostedZoneId: !GetAtt WorkloadStack.Outputs.LoadBalancerCanonicalHostedZoneNameID
+        DNSName: !GetAtt WorkloadStack.Outputs.LoadBalancerDNSName
 Outputs:
   VPCID:
     Description: VPC ID
-    Value:
-      Fn::GetAtt:
-      - VPCStack
-      - Outputs.VPCID
+    Value: !GetAtt VPCStack.Outputs.VPCID
   LoadBalancerDNSName:
     Description: DNS Name for the load balancer
-    Value:
-      Fn::GetAtt:
-      - WorkloadStack
-      - Outputs.LoadBalancerDNSName
+    Value: !GetAtt WorkloadStack.Outputs.LoadBalancerDNSName
   BastionDNSName:
     Description: Public DNS name of bastion host
-    Value:
-      Fn::GetAtt:
-      - BastionHost
-      - Outputs.BastionDNSName
+    Value: !GetAtt BastionHost.Outputs.BastionDNSName
   ClusterDNSName:
     Description: Public DNS name to reach cluster
     Condition: CreateDNSEntry
-    Value:
-      Ref: AWSPublicFQDN
+    Value: !Ref AWSPublicFQDN

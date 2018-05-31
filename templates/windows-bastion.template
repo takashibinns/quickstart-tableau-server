@@ -90,46 +90,29 @@ Resources:
       - IpProtocol: tcp
         FromPort: '3389'
         ToPort: '3389'
-        CidrIp:
-          Ref: SourceCIDR
+        CidrIp: !Ref SourceCIDR
       Tags:
       - Key: Name
-        Value:
-          Fn::Sub: "${AWS::StackName}-BastionSecurityGroup"
-      VpcId:
-        Ref: VPCID
+        Value: !Sub "${AWS::StackName}-BastionSecurityGroup"
+      VpcId: !Ref VPCID
   BastionHost:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType:
-        Ref: InstanceType
-      ImageId:
-        Fn::FindInMap:
-        - AWSAMIRegionMap
-        - Ref: AWS::Region
-        - WS2012R2
-      SecurityGroupIds:
-      - Ref: BastionSecurityGroup
-      KeyName:
-        Ref: KeyPairName
-      SubnetId:
-        Ref: SubnetId
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [ AWSAMIRegionMap, !Ref "AWS::Region", WS2012R2 ]
+      SecurityGroupIds: !Ref BastionSecurityGroup
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref SubnetId
       Tags:
       - Key: Name
-        Value:
-          Fn::Sub: "${AWS::StackName}-bastion-host"
+        Value: !Sub "${AWS::StackName}-bastion-host"
 Outputs:
   BastionInstance:
     Description: The bastion EC2 instance
-    Value:
-      Ref: BastionHost
+    Value: !Ref BastionHost
   BastionDNSName:
     Description: Public DNS name of bastion host
-    Value:
-      Fn::GetAtt:
-      - BastionHost
-      - PublicDnsName
+    Value: !GetAtt BastionHost.PublicDnsName
   SecurityGroup:
     Description: Baston Security Group
-    Value:
-      Ref: BastionSecurityGroup
+    Value: !Ref BastionSecurityGroup

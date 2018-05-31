@@ -207,17 +207,11 @@ Metadata:
       VPCID:
         default: VPC ID
 Conditions:
-  NoSSLCertficate:
-    Fn::Equals:
-    - ''
-    - Ref: SSLCertificateARN
+  NoSSLCertficate: !Equals [ "", !Ref SSLCertificateARN ]
   HasSSLCertificate:
     Fn::Not:
     - Condition: NoSSLCertficate
-  NoDNSEntry:
-    Fn::Equals:
-    - ''
-    - Ref: AWSPublicFQDN
+  NoDNSEntry: !Equals ["", !Ref AWSPublicFQDN]
 Mappings:
   AWSAMIRegionMap:
     AMI:
@@ -267,23 +261,13 @@ Resources:
       GroupDescription: Enable Web traffic
       SecurityGroupIngress:
       - IpProtocol: tcp
-        FromPort:
-          Fn::If:
-          - HasSSLCertificate
-          - '443'
-          - '80'
-        ToPort:
-          Fn::If:
-          - HasSSLCertificate
-          - '443'
-          - '80'
-        CidrIp:
-          Ref: SourceCIDR
+        FromPort: !If [ HasSSLCertificate, '443', '80' ]
+        ToPort: !If [ HasSSLCertificate, '443', '80' ]
+        CidrIp: !Ref SourceCIDR
       Tags:
       - Key: Name
         Value: LoadBalancerSecurityGroup
-      VpcId:
-        Ref: VPCID
+      VpcId: !Ref VPCID
   ServerLoadBalancer:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
     DependsOn:
@@ -291,33 +275,20 @@ Resources:
     Properties:
       Scheme: internet-facing
       Subnets:
-      - Ref: PrimaryPublicSubnetID
-      - Ref: Worker1PublicSubnetID
-      - Ref: Worker2PublicSubnetID
+      - !Ref PrimaryPublicSubnetID
+      - !Ref Worker1PublicSubnetID
+      - !Ref Worker2PublicSubnetID
       SecurityGroups:
-      - Ref: LoadBalancerSecurityGroup
+      - !Ref LoadBalancerSecurityGroup
       Listeners:
-      - Protocol:
-          Fn::If:
-          - HasSSLCertificate
-          - HTTPS
-          - HTTP
-        LoadBalancerPort:
-          Fn::If:
-          - HasSSLCertificate
-          - '443'
-          - '80'
+      - Protocol: !If [ HasSSLCertificate, HTTPS, HTTP ]
+        LoadBalancerPort: !If [ HasSSLCertificate, '443', '80' ]
         InstanceProtocol: HTTP
         InstancePort: '80'
-        SSLCertificateId:
-          Fn::If:
-          - HasSSLCertificate
-          - Ref: SSLCertificateARN
-          - Ref: AWS::NoValue
+        SSLCertificateId: !If [ HasSSLCertificate, !Ref SSLCertificateARN, !Ref "AWS::NoValue" ]
       Tags:
       - Key: Name
-        Value:
-          Fn::Sub: "${AWS::StackName}-cfn-lb"
+        Value: !Sub "${AWS::StackName}-cfn-lb"
   LoadBalancerRegisterRole:
     Type: AWS::IAM::Role
     Properties:
@@ -339,7 +310,7 @@ Resources:
             Action:
             - elasticloadbalancing:RegisterInstancesWithLoadBalancer
             Resource:
-            - Fn::Sub: arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/${ServerLoadBalancer}
+            - !Sub arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:loadbalancer/${ServerLoadBalancer}
   TableauWindowsServerInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     DependsOn:
@@ -347,7 +318,7 @@ Resources:
     Properties:
       Path: "/"
       Roles:
-      - Ref: LoadBalancerRegisterRole
+      - !Ref LoadBalancerRegisterRole
   WorkloadSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -355,29 +326,24 @@ Resources:
       Tags:
       - Key: Name
         Value: WorkloadSecurityGroup
-      VpcId:
-        Ref: VPCID
+      VpcId: !Ref VPCID
   WorkloadSecurityGroupLoadBalancerIngress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn:
     - WorkloadSecurityGroup
     - LoadBalancerSecurityGroup
     Properties:
-      GroupId:
-        Ref: WorkloadSecurityGroup
+      GroupId: !Ref WorkloadSecurityGroup
       IpProtocol: "-1"
-      SourceSecurityGroupId:
-        Ref: LoadBalancerSecurityGroup
+      SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
   WorkloadSecurityGroupMutualIngress:
     Type: AWS::EC2::SecurityGroupIngress
     DependsOn:
     - WorkloadSecurityGroup
     Properties:
-      GroupId:
-        Ref: WorkloadSecurityGroup
+      GroupId: !Ref WorkloadSecurityGroup
       IpProtocol: "-1"
-      SourceSecurityGroupId:
-        Ref: WorkloadSecurityGroup
+      SourceSecurityGroupId: !Ref WorkloadSecurityGroup
   PrimaryHost:
     Type: AWS::EC2::Instance
     DependsOn:
@@ -422,59 +388,32 @@ Resources:
                   - ".s3.amazonaws.com/ScriptedInstaller.py"
             c:\tabsetup\secrets.json:
               content:
-                content_admin_user:
-                  Ref: TableauServerAdminUser
-                content_admin_pass:
-                  Ref: TableauServerAdminPassword
+                content_admin_user: !Ref TableauServerAdminUser
+                content_admin_pass: !Ref TableauServerAdminPassword
             c:\tabsetup\registration.json:
               content:
-                first_name:
-                  Ref: RegFirstName
-                last_name:
-                  Ref: RegLastName
-                email:
-                  Ref: RegEmail
-                company:
-                  Fn::Join:
-                  - ";"
-                  - - Ref: RegCompany
-                    - AWSQuickStart
-                title:
-                  Ref: RegTitle
-                department:
-                  Ref: RegDepartment
-                industry:
-                  Ref: RegIndustry
-                phone:
-                  Ref: RegPhone
-                city:
-                  Ref: RegCity
-                state:
-                  Ref: RegState
-                zip:
-                  Ref: RegZip
-                country:
-                  Ref: RegCountry
+                first_name: !Ref RegFirstName
+                last_name: !Ref RegLastName
+                email: !Ref RegEmail
+                company: !Sub "${RegCompany};AWSQuickStart"
+                title: !Ref RegTitle
+                department: !Ref RegDepartment
+                industry: !Ref RegIndustry
+                phone: !Ref RegPhone
+                city: !Ref RegCity
+                state: !Ref RegState
+                zip: !Ref RegZip
+                country: !Ref RegCountry
             c:\tabsetup\config.json:
               content:
                 config.version: INTEGER:16
                 install.component.samples: BOOLEAN:true
                 wgserver.authenticate: local
-                worker.hosts:
-                  Fn::Sub: "${PrimaryIP}, ${Worker1IP}, ${Worker2IP}"
-                pgsql.host:
-                  Ref: Worker1IP
-                pgsql0.host:
-                  Ref: Worker1IP
-                pgsql1.host:
-                  Ref: Worker2IP
-                gateway.public.host:
-                  Fn::If:
-                  - NoDNSEntry
-                  - Fn::GetAtt:
-                    - ServerLoadBalancer
-                    - DNSName
-                  - Ref: AWSPublicFQDN
+                worker.hosts: !Sub "${PrimaryIP}, ${Worker1IP}, ${Worker2IP}"
+                pgsql.host: !Ref Worker1IP
+                pgsql0.host: !Ref Worker1IP
+                pgsql1.host: !Ref Worker2IP
+                gateway.public.host: !If [ NoDNSEntry, !GetAtt ServerLoadBalancer.DNSName, !Ref AWSPublicFQDN ]
                 worker0.gateway.enabled: BOOLEAN:true
                 worker0.gateway.port: INTEGER:80
                 worker0.vizportal.procs: INTEGER:0
@@ -573,7 +512,7 @@ Resources:
                   - "--registrationFile c:\\tabsetup\\registration.json"
                   - "--installDir d:\\tableau"
                   - "--licenseKey"
-                  - Ref: TableauServerLicenseKey
+                  - !Ref TableauServerLicenseKey
                   - c:\tabsetup\tableau-primary-installer.exe
                   - " > c:\\tabsetup\\installer-output.txt 2>&1"
               waitAfterCompletion: '0'
@@ -586,45 +525,21 @@ Resources:
               command: c:\Python27\python register-with-elb.py > lb_register.log
               waitAfterCompletion: '0'
     Properties:
-      InstanceType:
-        Fn::FindInMap:
-        - DefaultConfiguration
-        - MachineConfiguration
-        - InstanceType
-      ImageId:
-        Fn::FindInMap:
-        - AWSAMIRegionMap
-        - Ref: AWS::Region
-        - Fn::FindInMap:
-          - DefaultConfiguration
-          - MachineConfiguration
-          - WindowsVersion
-      SecurityGroupIds:
-      - Ref: WorkloadSecurityGroup
-      IamInstanceProfile:
-        Ref: TableauWindowsServerInstanceProfile
-      KeyName:
-        Ref: KeyPairName
-      SubnetId:
-        Ref: PrimarySubnetID
-      PrivateIpAddress:
-        Ref: PrimaryIP
+      InstanceType: !FindInMap [ DefaultConfiguration, MachineConfiguration, InstanceType ]
+      ImageId: !FindInMap [ AWSAMIRegionMap, !Ref "AWS::Region", !FindInMap [ DefaultConfiguration, MachineConfiguration, WindowsVersion ] ]
+      SecurityGroupIds: !Ref WorkloadSecurityGroup
+      IamInstanceProfile: !Ref TableauWindowsServerInstanceProfile
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref PrimarySubnetID
+      PrivateIpAddress: !Ref PrimaryIP
       BlockDeviceMappings:
       - DeviceName: "/dev/sda1"
         Ebs:
-          VolumeSize:
-            Fn::FindInMap:
-            - DefaultConfiguration
-            - MachineConfiguration
-            - SystemVolumeSize
+          VolumeSize: [ DefaultConfiguration, MachineConfiguration, SystemVolumeSize ]
           VolumeType: gp2
       - DeviceName: xvdc
         Ebs:
-          VolumeSize:
-            Fn::FindInMap:
-            - DefaultConfiguration
-            - MachineConfiguration
-            - DataVolumeSize
+          VolumeSize: [ DefaultConfiguration, MachineConfiguration, DataVolumeSize ]
           VolumeType: gp2
       UserData:
         Fn::Base64:
@@ -636,13 +551,11 @@ Resources:
             - Fn::Sub:
               - cfn-signal.exe -e %errorlevel% ${WHUrl}
               - WHUrl:
-                  Fn::Base64:
-                    Ref: TableauPrimaryWaitHandle
+                  Fn::Base64: !Ref TableauPrimaryWaitHandle
             - "</script>"
       Tags:
       - Key: Name
-        Value:
-          Fn::Sub: "${AWS::StackName}-primary"
+        Value: !Sub "${AWS::StackName}-primary"
   WorkerHost1:
     Type: AWS::EC2::Instance
     DependsOn: []
@@ -675,49 +588,26 @@ Resources:
                 Fn::Join:
                 - ''
                 - - c:\tabsetup\tableau-worker-installer.exe /PRIMARYIP="
-                  - Ref: PrimaryIP
+                  - !Ref PrimaryIP
                   - "\" /VERYSILENT /SUPPRESSMSGBOXES /ACCEPTEULA /DIR=d:\\tableau
                     /LOG=c:\\tabsetup\\installerlog.txt"
                   - " > c:\\tabsetup\\installer-output.txt 2>&1"
               waitAfterCompletion: '0'
     Properties:
-      InstanceType:
-        Fn::FindInMap:
-        - DefaultConfiguration
-        - MachineConfiguration
-        - InstanceType
-      ImageId:
-        Fn::FindInMap:
-        - AWSAMIRegionMap
-        - Ref: AWS::Region
-        - Fn::FindInMap:
-          - DefaultConfiguration
-          - MachineConfiguration
-          - WindowsVersion
-      SecurityGroupIds:
-      - Ref: WorkloadSecurityGroup
-      KeyName:
-        Ref: KeyPairName
-      SubnetId:
-        Ref: Worker1SubnetID
-      PrivateIpAddress:
-        Ref: Worker1IP
+      InstanceType: !FindInMap [ DefaultConfiguration, MachineConfiguration, InstanceType ]
+      ImageId: !FindInMap [ AWSAMIRegionMap, !Ref "AWS::Region", !FindInMap [ DefaultConfiguration, MachineConfiguration, WindowsVersion ] ]
+      SecurityGroupIds: !Ref WorkloadSecurityGroup
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref Worker1SubnetID
+      PrivateIpAddress: !Ref Worker1IP
       BlockDeviceMappings:
       - DeviceName: "/dev/sda1"
         Ebs:
-          VolumeSize:
-            Fn::FindInMap:
-            - DefaultConfiguration
-            - MachineConfiguration
-            - SystemVolumeSize
+          VolumeSize: !FindInMap [ DefaultConfiguration, MachineConfiguration, SystemVolumeSize ]
           VolumeType: gp2
       - DeviceName: xvdc
         Ebs:
-          VolumeSize:
-            Fn::FindInMap:
-            - DefaultConfiguration
-            - MachineConfiguration
-            - DataVolumeSize
+          VolumeSize: !FindInMap [ DefaultConfiguration, MachineConfiguration, DataVolumeSize ]
           VolumeType: gp2
       UserData:
         Fn::Base64:
@@ -729,13 +619,11 @@ Resources:
             - Fn::Sub:
               - cfn-signal.exe -e %errorlevel% ${WHUrl}
               - WHUrl:
-                  Fn::Base64:
-                    Ref: TableauWorkerWaitHandle
+                  Fn::Base64: !Ref TableauWorkerWaitHandle
             - "</script>"
       Tags:
       - Key: Name
-        Value:
-          Fn::Sub: "${AWS::StackName}-worker-1"
+        Value: !Sub "${AWS::StackName}-worker-1"
   WorkerHost2:
     Type: AWS::EC2::Instance
     DependsOn: []
@@ -774,27 +662,12 @@ Resources:
                   - " > c:\\tabsetup\\installer-output.txt 2>&1"
               waitAfterCompletion: '0'
     Properties:
-      InstanceType:
-        Fn::FindInMap:
-        - DefaultConfiguration
-        - MachineConfiguration
-        - InstanceType
-      ImageId:
-        Fn::FindInMap:
-        - AWSAMIRegionMap
-        - Ref: AWS::Region
-        - Fn::FindInMap:
-          - DefaultConfiguration
-          - MachineConfiguration
-          - WindowsVersion
-      SecurityGroupIds:
-      - Ref: WorkloadSecurityGroup
-      KeyName:
-        Ref: KeyPairName
-      SubnetId:
-        Ref: Worker2SubnetID
-      PrivateIpAddress:
-        Ref: Worker2IP
+      InstanceType: !FindInMap [ DefaultConfiguration, MachineConfiguration, InstanceType ]
+      ImageId: !FindInMap [ AWSAMIRegionMap, !Ref "AWS::Region", !FindInMap [ DefaultConfiguration, MachineConfiguration, WindowsVersion ] ]
+      SecurityGroupIds: !Ref WorkloadSecurityGroup
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref Worker2SubnetID
+      PrivateIpAddress: !Ref Worker2IP
       BlockDeviceMappings:
       - DeviceName: "/dev/sda1"
         Ebs:
@@ -827,15 +700,13 @@ Resources:
             - "</script>"
       Tags:
       - Key: Name
-        Value:
-          Fn::Sub: "${AWS::StackName}-worker-2"
+        Value: !Sub "${AWS::StackName}-worker-2"
   TableauWorkerWaitHandle:
     Type: AWS::CloudFormation::WaitConditionHandle
   TableauWorkerWaitCondition:
     Type: AWS::CloudFormation::WaitCondition
     Properties:
-      Handle:
-        Ref: TableauWorkerWaitHandle
+      Handle: !Ref TableauWorkerWaitHandle
       Count: '2'
       Timeout: '1800'
   TableauPrimaryWaitHandle:
@@ -843,53 +714,38 @@ Resources:
   TableauPrimaryWaitCondition:
     Type: AWS::CloudFormation::WaitCondition
     Properties:
-      Handle:
-        Ref: TableauPrimaryWaitHandle
+      Handle: !Ref TableauPrimaryWaitHandle
       Count: '1'
       Timeout: '5400'
 Outputs:
   LoadBalancerID:
     Description: Load Balancer ID
-    Value:
-      Ref: ServerLoadBalancer
+    Value: !Ref ServerLoadBalancer
   LoadBalancerDNSName:
     Description: Direct DNS name of load balancer
-    Value:
-      Fn::GetAtt:
-      - ServerLoadBalancer
-      - DNSName
+    Value: !GetAtt ServerLoadBalancer.DNSName
   LoadBalancerCanonicalHostedZoneNameID:
     Description: The Route53 ZoneID of the domain that handles the Amazon-assigned
       name of the load balancer
-    Value:
-      Fn::GetAtt:
-      - ServerLoadBalancer
-      - CanonicalHostedZoneNameID
+    Value: !GetAtt ServerLoadBalancer.CanonicalHostedZoneNameID
   PrimaryInstanceID:
     Description: Instance ID of Primary Server
-    Value:
-      Ref: PrimaryHost
+    Value: !Ref PrimaryHost
   PrimarySubnetID:
     Description: Subnet ID of Primary Server
-    Value:
-      Ref: PrimarySubnetID
+    Value: !Ref PrimarySubnetID
   Worker1InstanceID:
     Description: Instance ID of Worker1 Server
-    Value:
-      Ref: WorkerHost1
+    Value: !Ref WorkerHost1
   Worker1SubnetID:
     Description: Subnet ID of Primary Server
-    Value:
-      Ref: Worker1SubnetID
+    Value: !Ref Worker1SubnetID
   Worker2InstanceID:
     Description: Instance ID of Worker2 Server
-    Value:
-      Ref: WorkerHost2
+    Value: !Ref WorkerHost2
   Worker2SubnetID:
     Description: Subnet ID of Primary Server
-    Value:
-      Ref: Worker2SubnetID
+    Value: !Ref Worker2SubnetID
   SecurityGroup:
     Description: The security group the instances belong to
-    Value:
-      Ref: WorkloadSecurityGroup
+    Value: !Ref WorkloadSecurityGroup

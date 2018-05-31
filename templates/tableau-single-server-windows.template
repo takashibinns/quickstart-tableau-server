@@ -84,6 +84,7 @@ Parameters:
     Type: String
   InstanceType:
     AllowedValues:
+    # Inconsistencies with other 
     - m4.2xlarge
     - m4.4xlarge
     - m4.10xlarge
@@ -182,21 +183,12 @@ Mappings:
       DataVolumeSize: 100
       WindowsVersion: WS2012R2
 Conditions:
-  IsTrial:
-    Fn::Equals:
-    - ''
-    - Ref: TableauServerLicenseKey
-  NoServerSecurityGroup:
-    Fn::Equals:
-    - ''
-    - Ref: ExistingSecurityGroup
+  IsTrial: !Equals [ "", !Ref TableauServerLicenseKey ]
+  NoServerSecurityGroup: !Equals [ "", !Ref ExistingSecurityGroup ]
   HasServerSecurityGroup:
     Fn::Not:
     - Condition: NoServerSecurityGroup
-  NoElasticIP:
-    Fn::Equals:
-    - ''
-    - Ref: IPAddress
+  NoElasticIP: !Equals [ "", !Ref IPAddress ]
   HasElasticIP:
     Fn::Not:
     - Condition: NoElasticIP
@@ -210,21 +202,17 @@ Resources:
       - IpProtocol: tcp
         FromPort: '3389'
         ToPort: '3389'
-        CidrIp:
-          Ref: SourceCIDR
+        CidrIp: !Ref SourceCIDR
       - IpProtocol: tcp
         FromPort: '80'
         ToPort: '80'
-        CidrIp:
-          Ref: SourceCIDR
+        CidrIp: !Ref SourceCIDR
   IPAssoc:
     Type: AWS::EC2::EIPAssociation
     Condition: HasElasticIP
     Properties:
-      InstanceId:
-        Ref: TableauWindowsServer
-      EIP:
-        Ref: IPAddress
+      InstanceId: !Ref TableauWindowsServer
+      EIP: !Ref IPAddress
   TableauWindowsServer:
     Type: AWS::EC2::Instance
     Metadata:
@@ -233,39 +221,22 @@ Resources:
           files:
             c:\tabsetup\secrets.json:
               content:
-                content_admin_user:
-                  Ref: TableauServerAdminUser
-                content_admin_pass:
-                  Ref: TableauServerAdminPassword
+                content_admin_user: !Ref TableauServerAdminUser
+                content_admin_pass: !Ref TableauServerAdminPassword
             c:\tabsetup\registration.json:
               content:
-                first_name:
-                  Ref: RegFirstName
-                last_name:
-                  Ref: RegLastName
-                email:
-                  Ref: RegEmail
-                company:
-                  Fn::Join:
-                  - ";"
-                  - - Ref: RegCompany
-                    - AWSQuickStart
-                title:
-                  Ref: RegTitle
-                department:
-                  Ref: RegDepartment
-                industry:
-                  Ref: RegIndustry
-                phone:
-                  Ref: RegPhone
-                city:
-                  Ref: RegCity
-                state:
-                  Ref: RegState
-                zip:
-                  Ref: RegZip
-                country:
-                  Ref: RegCountry
+                first_name: !Ref RegFirstName
+                last_name: !Ref RegLastName
+                email: !Ref RegEmail
+                company: !Sub "${RegCompany};AWSQuickStart"
+                title: !Ref RegTitle
+                department: !Ref RegDepartment
+                industry: !Ref RegIndustry
+                phone: !Ref RegPhone
+                city: !Ref RegCity
+                state: !Ref RegState
+                zip: !Ref RegZip
+                country: !Ref RegCountry
             c:\tabsetup\ScriptedInstaller.py:
               source:
                 Fn::Join:
@@ -327,40 +298,19 @@ Resources:
               command: del c:\tabsetup\secrets.json
               waitAfterCompletion: '0'
     Properties:
-      InstanceType:
-        Ref: InstanceType
-      ImageId:
-        Fn::FindInMap:
-        - AWSAMIRegionMap
-        - Ref: AWS::Region
-        - Fn::FindInMap:
-          - DefaultConfiguration
-          - MachineConfiguration
-          - WindowsVersion
+      InstanceType: !Ref InstanceType
+      ImageId: !FindInMap [ AWSAMIRegionMap, !Ref "AWS::Region", !FindInMap [ DefaultConfiguration, MachineConfiguration, WindowsVersion ] ]
       BlockDeviceMappings:
       - DeviceName: "/dev/sda1"
         Ebs:
-          VolumeSize:
-            Fn::FindInMap:
-            - DefaultConfiguration
-            - MachineConfiguration
-            - SystemVolumeSize
+          VolumeSize: !FindInMap [ DefaultConfiguration, MachineConfiguration, SystemVolumeSize ] 
           VolumeType: gp2
       - DeviceName: xvdc
         Ebs:
-          VolumeSize:
-            Fn::FindInMap:
-            - DefaultConfiguration
-            - MachineConfiguration
-            - DataVolumeSize
+          VolumeSize: !FindInMap [ DefaultConfiguration, MachineConfiguration, DataVolumeSize ] 
           VolumeType: gp2
-      SecurityGroups:
-        Fn::If:
-        - HasServerSecurityGroup
-        - - Ref: ExistingSecurityGroup
-        - - Ref: InstanceSecurityGroup
-      KeyName:
-        Ref: KeyPairName
+      SecurityGroups: !If [ HasServerSecurityGroup, !Ref ExistingSecurityGroup, !Ref InstanceSecurityGroup ]
+      KeyName: !Ref KeyPairName
       UserData:
         Fn::Base64:
           Fn::Join:
@@ -376,34 +326,22 @@ Resources:
             - "</script>"
       Tags:
       - Key: Name
-        Value:
-          Fn::Sub: "${AWS::StackName}-cfn-tableau-server"
+        Value: !Sub "${AWS::StackName}-cfn-tableau-server"
   TableauServerWaitHandle:
     Type: AWS::CloudFormation::WaitConditionHandle
   TableauServerWaitCondition:
     Type: AWS::CloudFormation::WaitCondition
     Properties:
-      Handle:
-        Ref: TableauServerWaitHandle
+      Handle: !Ref TableauServerWaitHandle
       Timeout: '3600'
 Outputs:
   InstanceID:
     Description: EC2 InstanceID of the instance running Tableau Server
-    Value:
-      Ref: TableauWindowsServer
+    Value: !Ref TableauWindowsServer
   PublicIPAddress:
     Description: Public IP Address of instance running Tableau Server
-    Value:
-      Fn::GetAtt:
-      - TableauWindowsServer
-      - PublicIp
+    Value: !GetAtt TableauWindowsServer.PublicIp
   TableauServerURL:
     Description: Public DNS name of instance running Tableau Server
-    Value:
-      Fn::Join:
-      - ''
-      - - http://
-        - Fn::GetAtt:
-          - TableauWindowsServer
-          - PublicDnsName
-        - "/"
+    Value: !Sub "http://{TableauWindowsServer.PublicDnsName}/"
+
