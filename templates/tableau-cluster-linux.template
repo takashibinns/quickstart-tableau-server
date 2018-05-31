@@ -47,7 +47,7 @@ Metadata:
       - RegZip
       - RegCountry
     - Label:
-        default: Healthcare version
+        default: Healthcare version 
       Parameters:
       - HealthcareVersion
     ParameterLabels:
