@@ -577,7 +577,7 @@ Resources:
                     - "}"
                     - send_singal_to_topologyWaitHandle() {
                     - "# Signal successful completion"
-                    - Fn::Sub: "/opt/aws/bin/cfn-signal -e $? '${TopologyWaitHandle}'"
+                    - !Sub "/opt/aws/bin/cfn-signal -e $? '${TopologyWaitHandle}'"
                     - "}"
                     - set_topology
                     - unset -f set_topology
@@ -632,90 +632,75 @@ Resources:
           VolumeSize: !FindInMap [ DefaultConfiguration, MachineConfiguration, SystemVolumeSize ]
       EbsOptimized: true
       UserData:
-        Fn::Base64:
-          Fn::Join:
-          - "\n"
-          - - "#!/bin/bash -x"
-            - if [[ $(ls /etc/*-release) ]]; then
-            - "    OS=$( cat /etc/*-release \\"
-            - "    | grep ^ID= |awk -F= '{print $2}'\\"
-            - "    | tr -cd [:alpha:])"
-            - else
-            - "    return 1"
-            - fi
-            - if [ "$OS" == "ubuntu" ]; then
-            - "    apt-get update"
-            - "    apt-get install -y python-setuptools\n"
-            - "    wget https://s3-us-west-2.amazonaws.com/tableau-quickstart/tableau-postgresql-odbc_9.5.3_amd64.deb"
-            - "    dpkg -i tableau-postgresql-odbc_9.5.3_amd64.deb"
-            - "    apt-get install awscli -y"
-            - "    apt-get install jq -y"
-            - "    apt-get install expect -y"
-            - else
-            - "    rpm -i https://s3-us-west-2.amazonaws.com/tableau-quickstart/tableau-postgresql-odbc-9.5.3-1.x86_64.rpm"
-            - "    yum install epel-release -y"
-            - "    yum install awscli -y"
-            - "    yum install jq -y"
-            - "    yum install expect -y"
-            - fi
-            - "# Call Init"
-            - "/usr/bin/easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz"
-            - Fn::Sub: "/opt/aws/bin/cfn-init --stack '${AWS::StackName}' --resource
-                PrimaryServer  --region '${AWS::Region}'"
-            - "# Various machine configs"
-            - hostnamectl set-hostname $(hostnamectl --static)
-            - setup_sftp() {
-            - "    source '/tmp/secrets.properties'"
-            - '    useradd -m "$tsm_admin_user"'
-            - '    echo -e "$tsm_admin_pass\n$tsm_admin_pass" | passwd "$tsm_admin_user" '
-            - ''
-            - "    mkdir /restricted"
-            - "    chown root:root /restricted"
-            - "    chmod 551 /restricted"
-            - "    sed -i.bak -e 's:Subsystem\\s\\+sftp\\s\\+/usr/libexec/openssh/sftp-server:Subsystem
-              sftp  internal-sftp:' /etc/ssh/sshd_config"
-            - '    printf "\nMatch User $tsm_admin_user\n  ForceCommand internal-sftp\n  ChrootDirectory
-              /restricted\n  PasswordAuthentication yes\n  AllowTcpForwarding no\n  PermitTunnel
-              no\n  X11Forwarding no\n" >>/etc/ssh/sshd_config'
-            - "    service sshd restart"
-            - "}"
-            - setup_sftp
-            - unset -f setup_sftp
-            - if [ "$OS" == "ubuntu" ]; then
-            - "    export LANG=en_US.UTF-8"
-            - "    mv /tmp/tableau-server /tmp/tableau-server.deb"
-            - else
-            - "    mv /tmp/tableau-server /tmp/tableau-server.rpm"
-            - fi
-            - "# Install Tableau Server"
-            - install() {
-            - "    source '/tmp/secrets.properties'"
-            - Fn::Sub: "    local license='${TableauServerLicenseKey}'"
-            - '    local license=$([ "$license" == '''' ] && echo '''' || echo "-k
-              ''$license''")'
-            - "    /tmp/automated-installer -a $tsm_admin_user -f /tmp/config.json
-              -r /tmp/registration.json -s /tmp/secrets.properties $license -v --accepteula
-              --force /tmp/tableau-server*"
-            - "    source /etc/profile.d/tableau_server.sh"
-            - '    tsm topology nodes get-bootstrap-file --file bootstrap.cfg -u "$tsm_admin_user"
-              -p "$tsm_admin_pass"'
-            - "}"
-            - install
-            - unset -f install
-            - "# publish the Primary xml"
-            - mv bootstrap.cfg /restricted/
-            - "# Signal successful completion"
-            - Fn::Sub: "/opt/aws/bin/cfn-signal -e $? --stack '${AWS::StackName}'
-                --resource PrimaryServer --region '${AWS::Region}'"
-            - "# Wait for workers"
-            - "/tmp/workers.sh"
-            - "# Cleanup"
-            - rm -f /tmp/config.json
-            - rm -f /tmp/registration.json
-            - rm -f /tmp/secrets.properties
-            - rm -f /tmp/workers.sh
-            - rm -f /tmp/tableau-server*
-            - rm -f /tmp/automated-installer
+        Fn::Base64: !Sub |
+          #!/bin/bash -x
+          if [[ $(ls /etc/*-release) ]]; then OS=$( cat /etc/*-release | grep ^ID= |awk -F= '{print $2}' | tr -cd [:alpha:])
+          else
+              return 1
+          fi
+          if [ "$OS" == "ubuntu" ]; then
+              apt-get update
+              apt-get install -y python-setuptools\n
+              wget https://s3-us-west-2.amazonaws.com/tableau-quickstart/tableau-postgresql-odbc_9.5.3_amd64.deb
+              dpkg -i tableau-postgresql-odbc_9.5.3_amd64.deb
+              apt-get install awscli -y
+              apt-get install jq -y
+              apt-get install expect -y
+          else
+              rpm -i https://s3-us-west-2.amazonaws.com/tableau-quickstart/tableau-postgresql-odbc-9.5.3-1.x86_64.rpm
+              yum install epel-release -y
+              yum install awscli -y
+              yum install jq -y
+              yum install expect -y
+          fi
+          # Call Init
+          /usr/bin/easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+          /opt/aws/bin/cfn-init --stack '${AWS::StackName}' --resource PrimaryServer  --region '${AWS::Region}'
+          # Various machine configs
+          hostnamectl set-hostname $(hostnamectl --static)
+          setup_sftp() {
+              source '/tmp/secrets.properties'
+              useradd -m "$tsm_admin_user"
+              echo -e "$tsm_admin_pass\n$tsm_admin_pass" | passwd "$tsm_admin_user" 
+              mkdir /restricted
+              chown root:root /restricted
+              chmod 551 /restricted
+              sed -i.bak -e 's:Subsystem\\s\\+sftp\\s\\+/usr/libexec/openssh/sftp-server:Subsystem sftp  internal-sftp:' /etc/ssh/sshd_config
+              printf "\nMatch User $tsm_admin_user\n  ForceCommand internal-sftp\n  ChrootDirectory /restricted\n  PasswordAuthentication yes\n  AllowTcpForwarding no\n  PermitTunnel no\n  X11Forwarding no\n" >>/etc/ssh/sshd_config
+              service sshd restart
+          }
+          setup_sftp
+          unset -f setup_sftp
+          if [ "$OS" == "ubuntu" ]; then
+              export LANG=en_US.UTF-8
+              mv /tmp/tableau-server /tmp/tableau-server.deb
+          else
+              mv /tmp/tableau-server /tmp/tableau-server.rpm
+          fi
+          # Install Tableau Server
+          install() {
+              source '/tmp/secrets.properties'
+              local license='${TableauServerLicenseKey}'
+              local license=$([ "$license" == '''' ] && echo '''' || echo "-k ''$license''")
+              /tmp/automated-installer -a $tsm_admin_user -f /tmp/config.json -r /tmp/registration.json -s /tmp/secrets.properties $license -v --accepteula --force /tmp/tableau-server*
+              source /etc/profile.d/tableau_server.sh
+              tsm topology nodes get-bootstrap-file --file bootstrap.cfg -u "$tsm_admin_user" -p "$tsm_admin_pass"
+          }
+          install
+          unset -f install
+          # publish the Primary xml
+          mv bootstrap.cfg /restricted/
+          # Signal successful completion
+          /opt/aws/bin/cfn-signal -e $? --stack '${AWS::StackName}' --resource PrimaryServer --region '${AWS::Region}'
+          # Wait for workers
+          /tmp/workers.sh
+          # Cleanup
+          rm -f /tmp/config.json
+          rm -f /tmp/registration.json
+          rm -f /tmp/secrets.properties
+          rm -f /tmp/workers.sh
+          rm -f /tmp/tableau-server*
+          rm -f /tmp/automated-installer
       Tags:
       - Key: Name
         Value: !Sub ${AWS::StackName}-cfn-primary-tableau-server-linux
