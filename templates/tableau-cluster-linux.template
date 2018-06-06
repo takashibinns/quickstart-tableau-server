@@ -749,18 +749,15 @@ Resources:
           - ","
           - - Fn::Select:
               - '1'
-              - Ref: PrivateSubnetIds
+              - !Ref PrivateSubnetIds
             - Fn::Select:
               - '2'
-              - Ref: PrivateSubnetIds
-      LaunchConfigurationName:
-        Ref: WorkerLaunchConfig
-      MinSize:
-        Ref: WorkerCount
-      MaxSize:
-        Ref: WorkerCount
+              - !Ref PrivateSubnetIds
+      LaunchConfigurationName: !Ref WorkerLaunchConfig
+      MinSize: !Ref WorkerCount
+      MaxSize: !Ref WorkerCount
       LoadBalancerNames:
-      - Ref: ServerLoadBalancer
+      - !Ref ServerLoadBalancer
   WorkerLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Metadata:
@@ -781,11 +778,7 @@ Resources:
                   - TableauServerInstallerOnUbuntu
             "/tmp/automated-installer":
               mode: '550'
-              source:
-                Fn::FindInMap:
-                - DefaultConfiguration
-                - InstallationConfig
-                - AutomatedInstaller
+              source: !FindInMap [ DefaultConfiguration, InstallationConfig, AutomatedInstaller ]
             "/tmp/secrets.properties":
               mode: '640'
               content:
