@@ -1,0 +1,303 @@
+Parameters:
+  AmiId:
+    Type: AWS::EC2::Image::Id
+  TableauBucket:
+    Type: String
+    Default: tableau-quickstart
+  SourceCIDR: to fill in
+  TableauServerLinuxInstaller: From map 
+  TableauServerAdminUser:
+  TableauServerAdminPassword:
+  TableauExecutable:
+  HealthcareVersion:
+
+
+Mappings:
+  DefaultConfiguration:
+    InstallationConfig:
+      InstallationBucket: tableau-quickstart
+      InstallationExecutable: Setup-Server-x64.exe
+      InstallationWorkerExecutable: Setup-Worker-x64.exe
+    MachineConfiguration:
+      InstanceType: m4.4xlarge # Should this be here and not elsewhere?
+      SystemVolumeSize: 50
+      DataVolumeSize: 100
+      WindowsVersion: WS2012R2
+
+Conditions:
+  HasElasticIP:
+  NoServerSecurityGroup:
+Resources:
+    # Windows
+  LoadBalancerRegisterRole:
+    Type: AWS::IAM::Role
+  TableauWindowsServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+  WorkloadSecurityGroup:
+  WorkloadSecurityGroupLoadBalancerIngress:
+  WorkloadSecurityGroupMutualIngress:
+  PrimaryHost:
+    Type: AWS::EC2::Instance
+    DependsOn:
+    - TableauWorkerWaitCondition
+    - ServerLoadBalancer
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            msi:
+              python: https://www.python.org/ftp/python/2.7.12/python-2.7.12.msi
+          files:
+            c:\tabsetup\json2yml.py:
+              content: |
+                import sys
+                import yaml
+                import json
+                config_data = json.load(sys.stdin)
+                for k,v in config_data.items():
+                    if v.startswith('INTEGER:'):
+                        newvalue = v[len('INTEGER:'):]
+                        config_data[k] = int(newvalue)
+                    elif v.startswith('FLOAT:'):
+                        newvalue = v[len('FLOAT:'):]
+                        config_data[k] = float(newvalue)
+                    elif v.startswith('BOOLEAN:'):
+                        newvalue = v[len('BOOLEAN:'):]
+                        config_data[k] = json.loads(newvalue.lower())
+                yaml.safe_dump(config_data, sys.stdout, default_flow_style=False)
+                
+            c:\tabsetup\ScriptedInstaller.py:
+              source: !Sub https://${TableauBucket}.s3.amazonaws.com/ScriptedInstaller.py"
+            c:\tabsetup\secrets.json:
+              content: !Sub |
+                {
+                  "content_admin_user": "${TableauServerAdminUser}",
+                  "content_admin_pass": "${TableauServerAdminPassword}",
+                }
+            c:\tabsetup\registration.json:
+              content: !Sub |
+                {
+                  "first_name": "${RegFirstName}",
+                  "last_name": "${RegLastName}",
+                  "email": "${RegLastName}",
+                  "company": "${RegCompany};AWSQuickStart",
+                  "title": "${RegTitle}",
+                  "department": "${RegDepartment}",
+                  "industry": "${RegIndustry}",
+                  "phone": "${RegPhone}",
+                  "city": "${RegCity}",
+                  "state": "${RegState}",
+                  "zip": "${RegZip}",
+                  "country": "${RegCountry}"
+                }
+            c:\tabsetup\config.json: # Check if Fn If works
+              content: !Sub 
+                - | 
+                  {
+                    "config.version": "INTEGER:16",
+                    "install.component.samples": "BOOLEAN:true",
+                    "wgserver.authenticate": "local",
+                    "worker.hosts": "${PrimaryIP}, ${Worker1IP}, ${Worker2IP}",
+                    "pgsql.host": "${Worker1IP}",
+                    "pgsql0.host": "${Worker1IP}",
+                    "pgsql1.host": "${Worker2IP}",
+                    "gateway.public.host": "${GatewayPublicHost}",
+                    "worker0.gateway.enabled": "BOOLEAN:true",
+                    "worker0.gateway.port": "INTEGER:80",
+                    "worker0.vizportal.procs": "INTEGER:0",
+                    "worker0.vizqlserver.procs": "INTEGER:0",
+                    "worker0.cacheserver.procs": "INTEGER:0",
+                    "worker0.searchserver.enabled": "BOOLEAN:true",
+                    "worker0.backgrounder.procs": "INTEGER:0",
+                    "worker0.dataserver.procs": "INTEGER:0",
+                    "worker0.dataengine.procs": "INTEGER:0",
+                    "worker0.filestore.enabled": "BOOLEAN:false",
+                    "worker0.zookeeper.procs": "INTEGER:1",
+                    "worker1.gateway.enabled": "BOOLEAN:true",
+                    "worker1.gateway.port": "INTEGER:80",
+                    "worker1.vizportal.procs": "INTEGER:2",
+                    "worker1.vizqlserver.procs": "INTEGER:2",
+                    "worker1.cacheserver.procs": "INTEGER:2",
+                    "worker1.searchserver.enabled": "BOOLEAN:true",
+                    "worker1.backgrounder.procs": "INTEGER:1",
+                    "worker1.dataserver.procs": "INTEGER:1",
+                    "worker1.dataengine.procs": "INTEGER:1",
+                    "worker1.filestore.enabled": "BOOLEAN:true",
+                    "worker1.zookeeper.procs": "INTEGER:1",
+                    "worker2.gateway.enabled": "BOOLEAN:true",
+                    "worker2.gateway.port": "INTEGER:80",
+                    "worker2.vizportal.procs": "INTEGER:2",
+                    "worker2.vizqlserver.procs": "INTEGER:2",
+                    "worker2.cacheserver.procs": "INTEGER:2",
+                    "worker2.searchserver.enabled": "BOOLEAN:true",
+                    "worker2.backgrounder.procs": "INTEGER:1",
+                    "worker2.dataserver.procs": "INTEGER:1",
+                    "worker2.dataengine.procs": "INTEGER:1",
+                    "worker2.filestore.enabled": "BOOLEAN:true",
+                    "worker2.zookeeper.procs": "INTEGER:1"
+                  }
+                - GatewayPublicHost: !If [ NoDNSEntry, !GetAtt ServerLoadBalancer.DNSName, !Ref AWSPublicFQDN ]
+            c:\tabsetup\tableau-primary-installer.exe:
+              source: !Sub https://${TableauBucket}.s3.amazonaws.com/${TableauPrimaryExecutable}
+            c:\tabsetup\register-with-elb.py:
+              content: !Sub |
+                import urllib2
+                import boto3
+                fyle = urllib2.urlopen('http://169.254.169.254/latest/meta-data/instance-id')
+                my_instance_id = fyle.read()
+                client = boto3.client('elb', region_name=${"AWS::Region"})
+                client.register_instances_with_load_balancer(LoadBalancerName='${ServerLoadBalancer}',
+                     Instances=[{'InstanceId': my_instance_id},{'InstanceId':'${WorkerHost1}'},{'InstanceId':'${WorkerHost2}'}])
+                
+          commands:
+            1-disable-firewall:
+              cwd: c:\Windows\System32
+              command: netsh advfirewall set allprofiles state off
+              waitAfterCompletion: 0
+            2-pip-install-libs:
+              command: c:\Python27\Scripts\pip.exe install pyyaml boto3
+              cwd: c:\Python27\Scripts
+              waitAfterCompletion: 0
+            3-convert-config:
+              cwd: c:\tabsetup
+              command: type config.json | c:\Python27\python json2yml.py > config.yml
+              waitAfterCompletion: 0
+            4-run-installer:
+              cwd: c:\tabsetup
+              command: !Sub c:\Python27\python.exe ScriptedInstaller.py install --installerLog C:\tabsetup\tabinstall.txt --secretsFile c:\\tabsetup\\secrets.json --configFile c:\\tabsetup\\config.yml --registrationFile c:\\tabsetup\\registration.json --installDir d:\\tableau --licenseKey ${TableauServerLicenseKey} c:\tabsetup\tableau-primary-installer.exe > c:\\tabsetup\\installer-output.txt 2>&1
+              waitAfterCompletion: 0
+            5-cleanup-secrets:
+              cwd: c:\tabsetup
+              command: del c:\tabsetup\secrets.json
+              waitAfterCompletion: 0
+            6-register-with-load-balancer:
+              cwd: c:\tabsetup
+              command: c:\Python27\python register-with-elb.py > lb_register.log
+              waitAfterCompletion: 0
+    Properties:
+      # Add in encryption for EBS volumes
+      InstanceType: !FindInMap [ DefaultConfiguration, MachineConfiguration, InstanceType ]
+      ImageId: !Ref AmiId
+      SecurityGroupIds: !Ref WorkloadSecurityGroup
+      IamInstanceProfile: !Ref TableauWindowsServerInstanceProfile
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref PrimarySubnetID
+      PrivateIpAddress: !Ref PrimaryIP
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeSize: !Ref SystemVolumeSize
+          VolumeType: gp2
+      - DeviceName: xvdc
+        Ebs:
+          VolumeSize: !Ref DataVolumeSize
+          VolumeType: gp2
+      UserData: 
+        Fn::Base64: !Sub |
+          <script>
+          cfn-init.exe -v -s ${AWS::StackId} -r PrimaryHost --region ${AWS::Region}
+          cfn-signal.exe -e %errorlevel% ${TableauPrimaryWaitHandle}
+          </script>
+      Tags:
+      - Key: Name
+        Value: !Sub "${AWS::StackName}-primary"
+  WorkerHost1:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            c:\tabsetup\tableau-worker-installer.exe:
+              source: https://${TableauBucket}.s3.amazonaws.com/${TableauWorkerExecutable}
+          commands:
+            1-disable-firewall:
+              cwd: c:\Windows\System32
+              command: netsh advfirewall set allprofiles state off
+              waitAfterCompletion: '0'
+            2-run-installer:
+              cwd: c:\tabsetup
+              command: !Sub c:\tabsetup\tableau-worker-installer.exe /PRIMARYIP="${PrimaryIP}" /VERYSILENT /SUPPRESSMSGBOXES /ACCEPTEULA /DIR=d:\\tableau /LOG=c:\\tabsetup\\installerlog.txt > c:\\tabsetup\\installer-output.txt 2>&1
+              waitAfterCompletion: '0'
+    Properties: # Add encryption
+      InstanceType: !FindInMap [ DefaultConfiguration, MachineConfiguration, InstanceType ]
+      ImageId: !Ref AmiId
+      SecurityGroupIds: !Ref WorkloadSecurityGroup
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref Worker1SubnetID
+      PrivateIpAddress: !Ref Worker1IP
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeSize: !Ref SystemVolumeSize
+          VolumeType: gp2
+      - DeviceName: xvdc
+        Ebs:
+          VolumeSize: !Ref DataVolumeSize
+          VolumeType: gp2
+      UserData:
+        Fn::Base64: !Sub |
+          <script>
+          cfn-init.exe -v -s ${AWS::StackId} -r WorkerHost1 --region ${AWS::Region}
+          cfn-signal.exe -e %errorlevel% ${TableauWorkerWaitHandle}
+          <script>
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-worker-1
+  WorkerHost2:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            c:\tabsetup\tableau-worker-installer.exe:
+              source: https://${TableauBucket}.s3.amazonaws.com/${TableauWorkerExecutable}
+          commands:
+            1-disable-firewall:
+              cwd: c:\Windows\System32
+              command: netsh advfirewall set allprofiles state off
+              waitAfterCompletion: '0'
+            2-run-installer:
+              cwd: c:\tabsetup
+              command: !Sub c:\tabsetup\tableau-worker-installer.exe /PRIMARYIP="${PrimaryIP}" /VERYSILENT /SUPPRESSMSGBOXES /ACCEPTEULA /DIR=d:\\tableau /LOG=c:\\tabsetup\\installerlog.txt > c:\\tabsetup\\installer-output.txt 2>&1
+              waitAfterCompletion: '0'
+    Properties: # Add encryption
+      InstanceType: !FindInMap [ DefaultConfiguration, MachineConfiguration, InstanceType ]
+      ImageId: !Ref AmiId
+      SecurityGroupIds: !Ref WorkloadSecurityGroup
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref Worker1SubnetID
+      PrivateIpAddress: !Ref Worker1IP
+      BlockDeviceMappings:
+      - DeviceName: "/dev/sda1"
+        Ebs:
+          VolumeSize: !FindInMap [ DefaultConfiguration, MachineConfiguration, SystemVolumeSize ]
+          VolumeType: gp2
+      - DeviceName: xvdc
+        Ebs:
+          VolumeSize: !FindInMap [ DefaultConfiguration, MachineConfiguration, DataVolumeSize ]
+          VolumeType: gp2
+      UserData:
+        Fn::Base64: !Sub |
+          <script>
+          cfn-init.exe -v -s ${AWS::StackId} -r WorkerHost1 --region ${AWS::Region}
+          cfn-signal.exe -e %errorlevel% ${TableauWorkerWaitHandle}
+          <script>
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-worker-2
+  TableauWorkerWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  TableauWorkerWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    Properties:
+      Handle: !Ref TableauWorkerWaitHandle
+      Count: '2'
+      Timeout: '1800'
+  TableauPrimaryWaitHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+  TableauPrimaryWaitCondition:
+    Type: AWS::CloudFormation::WaitCondition
+    Properties:
+      Handle: !Ref TableauPrimaryWaitHandle
+      Count: '1'
+      Timeout: '5400'

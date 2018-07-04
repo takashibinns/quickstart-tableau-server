@@ -1,0 +1,197 @@
+
+Parameters:
+  SSLCertificateARN: # to fill
+
+
+Conditions:
+  HasWorkers: !Not [ !Equals [ 0 , !Ref WorkerCount]]
+  NoSSLCertficate: !Equals [ "", !Ref SSLCertificateARN]
+  HasSSLCertificate: !Not [ Condition: NoSSLCertficate ]
+  NoServerSecurityGroup: !Equals [ "", !Ref ExistingSecurityGroup ]
+  HasServerSecurityGroup: !Not [ Condition: NoServerSecurityGroup ]
+  NoElasticIP: !Equals [ "" , !Ref IPAddress ]
+  HasElasticIP: !Not [ Condition: NoElasticIP ]
+  NoDNSEntry: !Or [ !Equals [ "", !Ref AWSHostedZoneID ] , !Equals [ "", !Ref AWSPublicFQDN ]]
+  CreateDNSEntry: !Not [ Condition: NoDNSEntry ]
+  IsCentos: !Equals [ CentOS-7-HVM. , !Ref AMIOS ]
+  IsHealthcare: !Equals [ "YES", !Ref HealthcareVersion ]
+
+
+Conditions:
+  NoSSLCertficateELB: !Equals [ "", !Ref SSLCertificateARN]
+  HasSSLCertificateELB: !Not [ Condition: NoSSLCertficate ]
+  NoSSLCertficateInstance: !Equals [ "", !Ref SSLCertificateARNInstance]
+  HasSSLCertificateInstance: !Not [ Condition: NoSSLCertficateInstance ]
+
+Resources:
+  VpcInfo:
+    Type: Custom::VpcInfo
+    Properties:
+      ServiceToken: !GetAtt InfoLambda.Arn
+      Region: !Ref AWS::Region
+      Func: DescribeVpc
+      VpcId: !Ref VpcId
+  InfoLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: | 
+          var aws = require('awssdk');
+          exports.handler = (e, c) => {
+            console.log('REQUEST RECEIVED:\\n' + JSON.stringify(e));
+            // For Delete requests, immediately send a SUCCESS response.
+            if (e.RequestType == 'Delete') {
+              sendResponse(e, c, 'SUCCESS');
+              return;
+            }
+            var ec2 = new aws.EC2({ region: e.ResourceProperties.Region });
+            var vpc = e.ResourceProperties.VpcId;
+            var func = e.ResourceProperties.Func;
+            var status = 'FAILED';
+            var responseData = {};
+            if (func === 'DescribeVpc') {
+              // Get VPCs with the specified id
+              ec2.describeVpcs({ VpcIds: [vpc] }, (err, data) => {
+                console.log('vpcs:\\n' + JSON.stringify(data));
+                err = err || (data.Vpcs.length !== 1 ? 'DescribeVpcs returned
+                ' + data.Vpcs.length + ' results.' : undefined);
+                if (err) {
+                  responseData.Error = 'DescribeVpcs call failed';
+                  console.log(responseData.Error + ':\\n', err);
+                } else {
+                  status = 'SUCCESS';
+                  responseData = data.Vpcs[0];
+                }
+                sendResponse(e, c, status, responseData);
+              });
+            } else {
+              sendResponse(e, c, status, {Error: 'Unknown Function ' + func});
+            }
+          };
+          // Send response to the pre-signed S3 URL
+          function sendResponse(e, c, status, responseData) {
+            var responseBody = JSON.stringify({
+              Status: status,
+              Reason: 'See the details in CloudWatch Log Stream: ' + c.logStreamName,
+              PhysicalResourceId: c.logStreamName,
+              StackId: e.StackId,
+              RequestId: e.RequestId,
+              LogicalResourceId: e.LogicalResourceId,
+              Data: responseData
+            });
+            console.log('RESPONSE BODY:\\n', responseBody);
+            var https = require('https');
+            var url = require('url');
+            var parsedUrl = url.parse(e.ResponseURL);
+            var options = {
+              hostname: parsedUrl.hostname,
+              port: 443,
+              path: parsedUrl.path,
+              method: 'PUT',
+            headers: {
+              'content-type': '',
+              'content-length': responseBody.length
+            }
+          };
+          console.log('SENDING RESPONSE...\\n');
+          var request = https.request(options, (response) => {
+            console.log('STATUS: ' + response.statusCode);
+            console.log('HEADERS: ' + JSON.stringify(response.headers));
+            c.done(); // Tell AWS Lambda function execution is done
+          });
+          request.on('error', (err) => {
+          console.log('sendResponse Error:' + err);
+            c.done(); // Tell AWS Lambda function execution is done
+          });
+          // write data to request body
+          request.write(responseBody);
+          request.end();
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: nodejs4.3
+      Timeout: 30
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Path: "/"
+      Policies:
+      - PolicyName: root
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: ec2:DescribeVpcs
+            Resource: "*"
+  RootRole: # To be determined
+  RootInstanceProfile: # To be determined
+  WorkerWaitHandle: # To be determined
+  WorkerWaitCondition: # To be determined
+  TopologyWaitHandle: # To be determined
+  TopologyWaitCondition: # To be determined
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable Web traffic
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: !If [ HasSSLCertificateELB, 443, 80 ]
+        ToPort: !If [ HasSSLCertificateELB, 443, 80 ]
+        CidrIp: !Ref SourceCIDR
+      Tags:
+      - Key: Name
+        Value: LoadBalancerSecurityGroup
+      VpcId: !Ref VpcId
+  ServerLoadBalancer: # Converge with Windows
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    DependsOn:
+    - LoadBalancerSecurityGroup
+    Properties:
+      Scheme: internet-facing
+      Subnets: !Split [",", !Join [",", !Ref PublicSubnetIds] ]
+      SecurityGroups:
+      - !Ref LoadBalancerSecurityGroup
+      Listeners:
+      - Protocol: !If [ HasSSLCertificateELB, HTTPS, HTTP]
+        LoadBalancerPort: !If [ HasSSLCertificateELB, 443, 80 ]
+        InstanceProtocol: !If [ HasSSLCertificateELB, HTTPS, HTTP]
+        InstancePort: !If [ HasSSLCertificateInstance, 443, 80 ]
+        SSLCertificateId: !If [ HasSSLCertificateInstance, !Ref SSLCertificateARN, !Ref "AWS::NoValue" ] # Do we need multiple certs?
+      Instances: !GetAtt # Windows or Linux AMI
+      Tags:
+      - Key: Name
+        Value: !Sub ${AWS::StackName}-cfn-lb
+  DNSNameEntry: # Not in Windows
+    Type: AWS::Route53::RecordSet
+    Condition: CreateDNSEntry
+    DependsOn:
+    - ServerLoadBalancer
+    Properties:
+      HostedZoneId: !Ref AWSHostedZoneID
+      Name: !Sub "${AWSPublicFQDN}."
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt ServerLoadBalancer.CanonicalHostedZoneNameID
+        DNSName: !GetAtt ServerLoadBalancer.DNSName
+
+
+  
+  # Windows
+  LoadBalancerRegisterRole:
+    Type: AWS::IAM::Role
+  TableauWindowsServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+  WorkloadSecurityGroup:
+  WorkloadSecurityGroupLoadBalancerIngress:
+  WorkloadSecurityGroupMutualIngress:
+  

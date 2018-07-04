@@ -1,10 +1,14 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Tableau Server Cluster running on Linux (CentOS/Ubuntu).
+Description: Encrypts an AMI from source
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterLabels:
       AmiId:
         default: AMI ID to encrypt
+      AmiRegion:
+        default: AMI Region
+      SubnetId:
+        default: Subnet Id
 
 Parameters:
   AmiId:
@@ -15,6 +19,7 @@ Parameters:
     Description: Region that contains the source AMI
   SubnetId:
     Type: AWS::EC2::Subnet::Id
+    Description: Subnet to launch EC2 instance if the base AMI is a Marketplace or Windows AMI.
 
 Resources:
   # Set up State Machine
