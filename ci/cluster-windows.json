@@ -86,5 +86,13 @@
   {
     "ParameterKey": "QSS3BucketName",
     "ParameterValue": "$[taskcat_autobucket]"
+  },
+  {
+    "ParameterKey": "Password",
+    "ParameterValue": "$[alfred_genpass_32]"
+  },
+  {
+    "ParameterKey": "Username",
+    "ParameterValue": "qsadmin"
   }
 ]

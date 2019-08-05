@@ -4,11 +4,13 @@
     "Parameters": {
         "AWSHostedZoneID": {
             "Description": "DNS Zone ID to contain the cluster's DNS entry (blank = no DNS)",
-            "Type": "String"
+            "Type": "String",
+            "Default": ""
         },
         "AWSPublicFQDN": {
             "Description": "Tableau Server portal will be reachable at this address (blank = no DNS)",
-            "Type": "String"
+            "Type": "String",
+            "Default": ""
         },
         "AvailabilityZones": {
             "Description": "List of Availability Zones to use for the subnets in the VPC. Note: The logical order is preserved and 3 AZs MUST be used for this deployment",
@@ -29,6 +31,13 @@
         "KeyPairName": {
             "Description": "Public/private key pairs allow you to securely connect to your instance after it launches",
             "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "Password": {
+            "AllowedPattern": "^(?=[a-zA-Z0-9#@$?!]{8,}$)(?=.*?[a-z])(?=.*?[A-Z])(?=.*?[0-9]).*",
+            "Description": "Tableau Services Manager (TSM) administrator password",
+            "MinLength": "8",
+            "NoEcho": "true",
+            "Type": "String"
         },
         "QSS3BucketName": {
             "AllowedPattern": "^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$",
@@ -96,6 +105,12 @@
         "TableauServerLicenseKey": {
             "Description": "License Key",
             "MinLength": "1",
+            "Type": "String"
+        },
+        "Username": {
+            "AllowedPattern": "[A-Za-z0-9]+",
+            "Description": "Tableau Services Manager (TSM) administrator username (cannot be Administrator)",
+            "MaxLength": "30",
             "Type": "String"
         }
     },
@@ -459,6 +474,15 @@
                     "AWSPublicFQDN": {
                         "Ref": "AWSPublicFQDN"
                     },
+                    "AWSHostedZoneID": {
+                        "Ref": "AWSHostedZoneID"
+                    },
+                    "BastionSecurityGroupID": {
+                        "Fn::GetAtt": [
+                            "BastionHost",
+                            "Outputs.SecurityGroup"
+                        ]
+                    },
                     "TableauServerAdminPassword": {
                         "Ref": "TableauServerAdminPassword"
                     },
@@ -486,6 +510,9 @@
                             "VPCStack",
                             "Outputs.PrivateSubnet1AID"
                         ]
+                    },
+                    "Password": {
+                        "Ref": "Password"
                     },
                     "QSS3BucketName": {
                         "Ref": "QSS3BucketName"
@@ -537,6 +564,9 @@
                     },
                     "TableauServerLicenseKey": {
                         "Ref": "TableauServerLicenseKey"
+                    },
+                    "Username": {
+                        "Ref": "Username"
                     },
                     "VPCID": {
                         "Fn::GetAtt": [
@@ -630,36 +660,6 @@
                         "BastionHost",
                         "Outputs.SecurityGroup"
                     ]
-                }
-            }
-        },
-        "DNSNameEntry": {
-            "Type": "AWS::Route53::RecordSet",
-            "Condition": "CreateDNSEntry",
-            "DependsOn": [
-                "WorkloadStack"
-            ],
-            "Properties": {
-                "HostedZoneId": {
-                    "Ref": "AWSHostedZoneID"
-                },
-                "Name": {
-                    "Fn::Sub": "${AWSPublicFQDN}."
-                },
-                "Type": "A",
-                "AliasTarget": {
-                    "HostedZoneId": {
-                        "Fn::GetAtt": [
-                            "WorkloadStack",
-                            "Outputs.LoadBalancerCanonicalHostedZoneNameID"
-                        ]
-                    },
-                    "DNSName": {
-                        "Fn::GetAtt": [
-                            "WorkloadStack",
-                            "Outputs.LoadBalancerDNSName"
-                        ]
-                    }
                 }
             }
         }
