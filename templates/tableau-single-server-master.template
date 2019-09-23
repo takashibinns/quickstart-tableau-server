@@ -406,6 +406,7 @@
     },
     "ADStack": {
       "DependsOn": "VPCStack",
+      "Condition": "EnableADAuth",
       "Type": "AWS::CloudFormation::Stack",
       "Properties": {
         "TemplateURL": {
